@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>🌍 City Population Predictor</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+    #map { height: 400px; margin-top: 20px; }
+    .result { margin-top: 20px; font-size: 16px; font-weight: bold; }
+    select, button { padding: 6px; margin: 5px; }
+  </style>
+</head>
+<body>
+  <h2>🌍 City Population Predictor</h2>
+
+  <label for="city">City:</label>
+  <select id="city"></select>
+
+  <label for="year">Year:</label>
+  <select id="year"></select>
+
+  <button onclick="getPopulation()">Get Population</button>
+
+  <div id="result" class="result"></div>
+  <div id="map"></div>
+
+  <script>
+    // Initialize map
+    var map = L.map('map').setView([20.5937, 78.9629], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    var marker;
+
+    // Load cities dynamically from server
+    async function loadCities() {
+      try {
+        const res = await axios.get("/cities");
+        const cities = res.data;
+        let citySelect = document.getElementById("city");
+        cities.forEach(c => {
+          let option = document.createElement("option");
+          option.value = c;
+          option.textContent = c;
+          citySelect.appendChild(option);
+        });
+      } catch (err) {
+        console.error("Error loading cities:", err);
+      }
+    }
+
+    // Load years 2000-2045
+    function loadYears() {
+      let yearSelect = document.getElementById("year");
+      for (let y = 2000; y <= 2045; y++) {
+        let option = document.createElement("option");
+        option.value = y;
+        option.textContent = y;
+        yearSelect.appendChild(option);
+      }
+    }
+
+    // Get Population Data
+    async function getPopulation() {
+      let city = document.getElementById("city").value;
+      let year = document.getElementById("year").value;
+      let resultDiv = document.getElementById("result");
+
+      try {
+        const res = await axios.get(`/predict?city=${city}&year=${year}`);
+        const data = res.data;
+
+        if (data.error) {
+          resultDiv.innerHTML = `<span style="color:red">${data.error}</span>`;
+          return;
+        }
+
+        resultDiv.innerHTML = `
+          📍 <b>${data.city} (${data.year})</b><br>
+          👥 Population: ${data.population.toLocaleString()}<br>
+          👨 Male Ratio: ${data.male_ratio}%<br>
+          👩 Female Ratio: ${data.female_ratio}%<br>
+          🗳️ Voter Ratio: ${data.voter_ratio}%<br>
+          ${data.predicted ? "🔮 Predicted" : "✅ Historical Data"}
+        `;
+
+        // Move map to city (basic geocoding using Nominatim)
+        if (marker) map.removeLayer(marker);
+        const geoRes = await axios.get(`https://nominatim.openstreetmap.org/search?city=${city}&country=India&format=json`);
+        if (geoRes.data.length > 0) {
+          let lat = geoRes.data[0].lat;
+          let lon = geoRes.data[0].lon;
+          marker = L.marker([lat, lon]).addTo(map).bindPopup(city).openPopup();
+          map.setView([lat, lon], 8);
+        }
+      } catch (err) {
+        resultDiv.innerHTML = `<span style="color:red">⚠️ Error fetching data</span>`;
+        console.error(err);
+      }
+    }
+
+    // Load dropdowns on page load
+    loadCities();
+    loadYears();
+  </script>
+</body>
+</html>
